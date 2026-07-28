@@ -58,6 +58,7 @@ func openCode(id, name, baseURL, quotaType string) domain.Service {
 		}, authenticationRules()...),
 		Probe: domain.ProbeConfig{
 			Protocol: domain.ProbeOpenAIChat,
+			Model:    "glm-5",
 		},
 	}
 }
