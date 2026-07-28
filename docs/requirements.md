@@ -19,6 +19,7 @@
 - 上游凭证引用一个服务配置，并包含自身的 API Key 和可选的服务地址覆盖。
 - 第一版内置 OpenCode Go、OpenCode Zen、OpenAI-compatible 和 Anthropic-compatible 服务预设，并始终提供自定义 HTTP 配置。
 - 第一版不内置 Gemini、Bedrock、Azure 等认证方式明显不同的服务。
+- 第一版假设同一 API Key 的额度对所有模型共享，凭证状态适用于该凭证承接的全部请求；不建模模型级或时间窗口级额度状态。
 
 ## 本地端点
 
