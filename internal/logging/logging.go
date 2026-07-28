@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -53,6 +55,36 @@ func (h *Hub) Lines() []string {
 func Fingerprint(secret string) string {
 	sum := sha256.Sum256([]byte(secret))
 	return fmt.Sprintf("sha256:%x", sum[:4])
+}
+
+func SafeHeaders(header http.Header) map[string][]string {
+	result := make(map[string][]string, len(header))
+	for name, values := range header {
+		switch strings.ToLower(name) {
+		case "authorization", "proxy-authorization", "x-api-key", "api-key", "cookie", "set-cookie":
+			continue
+		}
+		result[name] = append([]string(nil), values...)
+	}
+	return result
+}
+
+func ErrorPreview(body []byte, limit int) string {
+	if limit < 0 {
+		limit = 0
+	}
+	if len(body) > limit {
+		body = body[:limit]
+	}
+	preview := string(body)
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)("(?:api[_-]?key|authorization|access[_-]?token|refresh[_-]?token)"\s*:\s*")[^"]*`),
+		regexp.MustCompile(`(?i)(bearer\s+)[a-z0-9._~+/-]+`),
+	}
+	for _, pattern := range patterns {
+		preview = pattern.ReplaceAllString(preview, `${1}[REDACTED]`)
+	}
+	return preview
 }
 
 func parseLevel(value string) slog.Level {

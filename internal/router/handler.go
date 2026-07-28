@@ -106,6 +106,11 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 			matchBody = nil
 		}
 		match := classify.Evaluate(selection.Service.Rules, classify.Response{StatusCode: response.StatusCode, Header: response.Header, Body: matchBody})
+		if match.Result != domain.ClassSuccess && h.logger.Enabled(request.Context(), slog.LevelDebug) {
+			h.logger.Debug("upstream error response", "request_id", requestID, "pool", poolName,
+				"credential", selection.Credential.ID, "headers", appLog.SafeHeaders(response.Header),
+				"error_body", appLog.ErrorPreview(prefix, 4<<10))
+		}
 		h.transition(poolName, selection.Credential.ID, match, requestID)
 		canRetry := body.Replayable() && !selection.LastResort && (match.Result == domain.ClassExhausted || match.Result == domain.ClassInvalid)
 		if canRetry {

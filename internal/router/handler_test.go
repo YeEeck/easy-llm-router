@@ -86,6 +86,60 @@ func TestExhaustedCurrentCanRecoverAsLastResort(t *testing.T) {
 	}
 }
 
+func TestLargeFinalErrorBodyIsForwardedCompletely(t *testing.T) {
+	largeBody := `{"error":{"type":"GoUsageLimitError"},"padding":"` + strings.Repeat("x", 4096) + `"}`
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(writer, largeBody)
+	}))
+	defer upstream.Close()
+	manager := routerTestManager(t, upstream.URL)
+	if err := manager.SetStatus("main", "b", domain.StatusDisabled, "test"); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := manager.Snapshot()
+	cfg.Services[0].Rules = append([]domain.ResponseRule{{
+		Name: "quota-status", Result: domain.ClassExhausted,
+		Conditions: []domain.Condition{{StatusMin: http.StatusTooManyRequests, StatusMax: http.StatusTooManyRequests}},
+	}}, cfg.Services[0].Rules...)
+	if err := manager.ReplaceConfig(cfg, manager.Secrets()); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(Options{Manager: manager, ReplayMemoryLimit: 1024, ReplayLimit: 2048, ResponseInspectLimit: 128, TempDir: t.TempDir(), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "http://router/pools/main/chat", strings.NewReader("{}")))
+	if response.Code != http.StatusTooManyRequests || response.Body.String() != largeBody {
+		t.Fatalf("response=%d bytes=%d, want %d", response.Code, response.Body.Len(), len(largeBody))
+	}
+}
+
+func TestStreamErrorUpdatesStateWithoutRetry(t *testing.T) {
+	requests := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		requests++
+		writer.Header().Set("Content-Type", "text/event-stream")
+		writer.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(writer, "event: error\ndata: quota-reached\n\n")
+	}))
+	defer upstream.Close()
+	manager := routerTestManager(t, upstream.URL)
+	cfg, _ := manager.Snapshot()
+	cfg.Services[0].Rules = append([]domain.ResponseRule{{
+		Name: "stream-quota", Result: domain.ClassExhausted,
+		Conditions: []domain.Condition{{Body: true, Operator: domain.MatchRegex, Value: "quota-reached"}},
+	}}, cfg.Services[0].Rules...)
+	if err := manager.ReplaceConfig(cfg, manager.Secrets()); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(Options{Manager: manager, ReplayMemoryLimit: 1024, ReplayLimit: 2048, ResponseInspectLimit: 1024, TempDir: t.TempDir(), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "http://router/pools/main/chat", strings.NewReader("{}")))
+	_, state := manager.Snapshot()
+	if requests != 1 || state.Credentials["a"].Status != domain.StatusExhausted || !strings.Contains(response.Body.String(), "quota-reached") {
+		t.Fatalf("requests=%d state=%#v response=%q", requests, state, response.Body.String())
+	}
+}
+
 func routerTestManager(t *testing.T, baseURL string) *routing.Manager {
 	t.Helper()
 	rules := []domain.ResponseRule{
