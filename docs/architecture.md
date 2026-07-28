@@ -11,6 +11,12 @@
 
 第一版不引入数据库、Web UI、后台守护进程或完整 API 网关框架。
 
+## 构建与发布
+
+- Linux 和 Windows 在每次推送及拉取请求中执行测试、静态检查和构建。
+- 符合 `v*.*.*` 格式的 Git 标签触发 Linux 和 Windows 发布产物构建，并创建 GitHub Release。
+- Windows 配置使用 `%APPDATA%`，状态、日志和请求临时文件使用 `%LOCALAPPDATA%`。
+
 ## 组件边界
 
 - **domain**：服务配置、路由池、上游凭证、状态转换和选择策略；不依赖 TUI 或 HTTP。

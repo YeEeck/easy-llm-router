@@ -97,6 +97,15 @@ Linux 默认文件位置：
 ~/.local/state/easy-llm-router/router.jsonl
 ```
 
+Windows 默认文件位置：
+
+```text
+%APPDATA%\easy-llm-router\config.yaml
+%APPDATA%\easy-llm-router\credentials.yaml
+%LOCALAPPDATA%\easy-llm-router\state.json
+%LOCALAPPDATA%\easy-llm-router\router.jsonl
+```
+
 程序遵循 `XDG_CONFIG_HOME` 和 `XDG_STATE_HOME`。API Key 明文保存在独立凭证文件中；Linux 和 macOS 上该文件必须为 `0600`，否则程序拒绝加载。日志不会记录完整 Key、认证头或成功请求/响应正文。
 
 代理只允许监听回环地址。退出 TUI 时停止接收新请求，并默认等待最多 60 秒完成现有请求；再次退出会强制终止。
@@ -114,5 +123,7 @@ go test -race ./...
 go vet ./...
 go build ./cmd/easy-llm-router
 ```
+
+推送和拉取请求会在 Linux、Windows 上执行 CI。推送符合 `v*.*.*` 格式的标签会构建两个平台的发布压缩包并创建 GitHub Release。
 
 领域模型和架构决策见 [CONTEXT.md](./CONTEXT.md)、[产品需求](./docs/requirements.md) 和 [首版架构](./docs/architecture.md)。

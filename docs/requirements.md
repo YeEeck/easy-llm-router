@@ -48,15 +48,22 @@
 
 ## 平台范围
 
-- Linux 是第一版正式支持和端到端验证的平台。
+- Linux 和 Windows 是正式支持和自动化验证的平台。
 - macOS 保持可用，但不要求与 Linux 相同深度的自动化验证。
-- Windows 只要求能够交叉编译，第一版不承诺运行行为。
+- Windows TUI 以 Windows Terminal 为主要运行环境。
+- Linux 和 Windows 发布产物由符合 `v*.*.*` 格式的 Git 标签触发构建。
 
 ## 凭证存储
 
 - 第一版使用独立的本地凭证文件明文保存 API Key，不实现加密凭证库或系统密钥环集成。
 - Linux 和 macOS 上必须以仅当前用户可读写的 `0600` 权限创建并维护凭证文件；权限不安全时拒绝加载并明确报错。
 - 日志、错误信息和 TUI 默认只展示凭证名称或脱敏指纹，不得显示完整 API Key。
+
+## 文件位置
+
+- Linux 配置文件遵循 `XDG_CONFIG_HOME`，状态、日志和请求临时文件遵循 `XDG_STATE_HOME`。
+- Windows 配置文件保存在 `%APPDATA%\easy-llm-router`。
+- Windows 状态、日志和请求临时文件保存在 `%LOCALAPPDATA%\easy-llm-router`。
 
 ## 配置体验
 
