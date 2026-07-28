@@ -17,6 +17,8 @@
 - 产品同时提供常用服务的内置预设和用户自定义服务配置。
 - 服务配置包含默认服务地址、认证头及前缀、验证请求模板，以及成功、额度不足和认证失败的响应规则。
 - 上游凭证引用一个服务配置，并包含自身的 API Key 和可选的服务地址覆盖。
+- 第一版内置 OpenCode Go、OpenCode Zen、OpenAI-compatible 和 Anthropic-compatible 服务预设，并始终提供自定义 HTTP 配置。
+- 第一版不内置 Gemini、Bedrock、Azure 等认证方式明显不同的服务。
 
 ## 凭证状态
 
