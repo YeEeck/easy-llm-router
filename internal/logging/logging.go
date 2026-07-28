@@ -27,9 +27,14 @@ func New(path, level string) (*slog.Logger, *Hub, error) {
 		return nil, nil, err
 	}
 	rotator := &lumberjack.Logger{Filename: path, MaxSize: 10, MaxBackups: 5, Compress: false}
-	hub := &Hub{max: 500, file: rotator}
+	hub := NewHub(rotator)
 	options := &slog.HandlerOptions{Level: parseLevel(level)}
 	return slog.New(slog.NewJSONHandler(hub, options)), hub, nil
+}
+
+// NewHub returns a Hub that mirrors log lines to w.
+func NewHub(w io.Writer) *Hub {
+	return &Hub{max: 500, file: w}
 }
 
 func (h *Hub) Write(data []byte) (int, error) {

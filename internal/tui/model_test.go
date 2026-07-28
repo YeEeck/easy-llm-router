@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -170,10 +171,7 @@ func TestLogViewTruncatesOldestEntryHead(t *testing.T) {
 
 func logViewModel(t *testing.T, width, height int, entries ...string) Model {
 	t.Helper()
-	_, hub, err := logging.New(filepath.Join(t.TempDir(), "log.json"), "info")
-	if err != nil {
-		t.Fatalf("create log hub: %v", err)
-	}
+	hub := logging.NewHub(io.Discard)
 	for _, entry := range entries {
 		if _, err := hub.Write([]byte(entry + "\n")); err != nil {
 			t.Fatalf("write log entry: %v", err)
