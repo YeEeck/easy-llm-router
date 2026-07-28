@@ -68,7 +68,7 @@ func authenticationRules() []domain.ResponseRule {
 		Result: domain.ClassInvalid,
 		Conditions: []domain.Condition{{
 			StatusMin: 401,
-			StatusMax: 403,
+			StatusMax: 401,
 		}},
 	}}
 }
