@@ -216,6 +216,12 @@ func (m Model) viewLogs() string {
 	if len(lines) == 0 {
 		return "No matching log entries."
 	}
+	maxWidth := max(20, m.width-6)
+	for i := range lines {
+		if len([]rune(lines[i])) > maxWidth {
+			lines[i] = string([]rune(lines[i])[:maxWidth-3]) + "..."
+		}
+	}
 	return strings.Join(lines, "\n")
 }
 
@@ -462,7 +468,7 @@ func (m *Model) openForm(kind string, labels, values []string, editIndex int) {
 		inputs[i].Prompt = ""
 		inputs[i].Placeholder = labels[i]
 		inputs[i].SetValue(values[i])
-		inputs[i].SetWidth(60)
+		inputs[i].SetWidth(max(20, m.width-30))
 	}
 	if kind == "credential" {
 		inputs[2].EchoMode = textinput.EchoPassword
@@ -511,15 +517,26 @@ func (m Model) updateForm(message tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) viewForm() string {
 	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2")).Render(strings.ReplaceAll(m.form.kind, "-", " "))
 	label := lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Width(22)
+	maxFields := max(3, (m.height-7)/2)
+	if maxFields > len(m.form.inputs) {
+		maxFields = len(m.form.inputs)
+	}
+	start := max(0, m.form.focus-maxFields/2)
+	if start+maxFields > len(m.form.inputs) {
+		start = max(0, len(m.form.inputs)-maxFields)
+	}
+	end := min(len(m.form.inputs), start+maxFields)
 	var lines []string
-	for i, input := range m.form.inputs {
+	for i := start; i < end; i++ {
+		input := m.form.inputs[i]
 		marker := "  "
 		if i == m.form.focus {
 			marker = "> "
 		}
 		lines = append(lines, marker+label.Render(m.form.labels[i])+input.View())
 	}
-	return title + "\n\n" + strings.Join(lines, "\n\n") + "\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("Tab move  Enter save  Esc cancel")
+	position := fmt.Sprintf("fields %d-%d of %d", start+1, end, len(m.form.inputs))
+	return title + "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(position) + "\n\n" + strings.Join(lines, "\n\n") + "\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("Tab move  Enter save  Esc cancel")
 }
 
 func (m *Model) submitForm() error {

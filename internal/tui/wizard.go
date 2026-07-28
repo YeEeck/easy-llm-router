@@ -42,6 +42,9 @@ func (w Wizard) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch message := message.(type) {
 	case tea.WindowSizeMsg:
 		w.width = message.Width
+		for i := range w.inputs {
+			w.inputs[i].SetWidth(max(20, message.Width-32))
+		}
 	case tea.KeyPressMsg:
 		switch message.String() {
 		case "ctrl+c", "esc":
