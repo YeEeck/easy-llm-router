@@ -3,6 +3,7 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 type Paths struct {
@@ -18,13 +19,9 @@ func DefaultPaths() (Paths, error) {
 	if err != nil {
 		return Paths{}, err
 	}
-	stateRoot := os.Getenv("XDG_STATE_HOME")
-	if stateRoot == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return Paths{}, err
-		}
-		stateRoot = filepath.Join(home, ".local", "state")
+	stateRoot, err := defaultStateRoot()
+	if err != nil {
+		return Paths{}, err
 	}
 	configDir := filepath.Join(configRoot, "easy-llm-router")
 	stateDir := filepath.Join(stateRoot, "easy-llm-router")
@@ -35,4 +32,18 @@ func DefaultPaths() (Paths, error) {
 		Log:         filepath.Join(stateDir, "router.jsonl"),
 		Temp:        filepath.Join(stateDir, "tmp"),
 	}, nil
+}
+
+func defaultStateRoot() (string, error) {
+	if runtime.GOOS == "windows" {
+		return os.UserCacheDir()
+	}
+	if stateRoot := os.Getenv("XDG_STATE_HOME"); stateRoot != "" {
+		return stateRoot, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".local", "state"), nil
 }
