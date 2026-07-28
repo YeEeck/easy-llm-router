@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/yeck/easy-llm-router/internal/config"
 	"github.com/yeck/easy-llm-router/internal/domain"
+	"github.com/yeck/easy-llm-router/internal/logging"
 	"github.com/yeck/easy-llm-router/internal/preset"
 	"github.com/yeck/easy-llm-router/internal/routing"
 	"github.com/yeck/easy-llm-router/internal/store"
@@ -97,6 +98,88 @@ func TestWizardAPIKeyIsVisible(t *testing.T) {
 	if got := wizard.inputs[2].EchoMode; got != textinput.EchoNormal {
 		t.Fatalf("API key echo mode = %v, want EchoNormal", got)
 	}
+}
+
+func TestLogViewWrapsLongEntries(t *testing.T) {
+	entry := `{"level":"INFO","msg":"` + strings.Repeat("x", 120) + `"}`
+	model := logViewModel(t, 46, 30, entry)
+
+	lines := strings.Split(model.viewLogs(), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("wrapped lines = %d, want >= 3", len(lines))
+	}
+	if lines[0][0] != '{' {
+		t.Errorf("first line starts with %q, want entry head at column 0", lines[0][:1])
+	}
+	var rebuilt strings.Builder
+	rebuilt.WriteString(lines[0])
+	for _, line := range lines[1:] {
+		if !strings.HasPrefix(line, "  ") {
+			t.Errorf("continuation line not indented: %q", line)
+		}
+		rebuilt.WriteString(strings.TrimPrefix(line, "  "))
+	}
+	if rebuilt.String() != entry {
+		t.Errorf("wrapped content differs from entry:\n got %q\nwant %q", rebuilt.String(), entry)
+	}
+	for _, line := range lines {
+		if got := lipgloss.Width(line); got > 40 {
+			t.Errorf("line width = %d, want <= 40: %q", got, line)
+		}
+	}
+}
+
+func TestLogViewFillsBudgetFromNewest(t *testing.T) {
+	entries := []string{"entry-0", "entry-1", "entry-2", "entry-3", "entry-4", "entry-5", "entry-6"}
+	model := logViewModel(t, 60, 14, entries...)
+
+	got := strings.Split(model.viewLogs(), "\n")
+	want := entries[2:] // budget = max(5, 14-9) = 5 newest entries
+	if len(got) != len(want) {
+		t.Fatalf("visible lines = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestLogViewTruncatesOldestEntryHead(t *testing.T) {
+	entry := strings.Repeat("0123456789", 20)
+	model := logViewModel(t, 46, 14, entry)
+
+	lines := strings.Split(model.viewLogs(), "\n")
+	const budget = 5 // max(5, 14-9)
+	if len(lines) != budget {
+		t.Fatalf("visible lines = %d, want budget %d", len(lines), budget)
+	}
+	for _, line := range lines {
+		if !strings.HasPrefix(line, "  ") {
+			t.Errorf("expected head-truncated continuation line, got %q", line)
+		}
+	}
+	var rebuilt strings.Builder
+	for _, line := range lines {
+		rebuilt.WriteString(strings.TrimPrefix(line, "  "))
+	}
+	if !strings.HasSuffix(entry, rebuilt.String()) {
+		t.Errorf("visible tail %q is not a suffix of entry", rebuilt.String())
+	}
+}
+
+func logViewModel(t *testing.T, width, height int, entries ...string) Model {
+	t.Helper()
+	_, hub, err := logging.New(filepath.Join(t.TempDir(), "log.json"), "info")
+	if err != nil {
+		t.Fatalf("create log hub: %v", err)
+	}
+	for _, entry := range entries {
+		if _, err := hub.Write([]byte(entry + "\n")); err != nil {
+			t.Fatalf("write log entry: %v", err)
+		}
+	}
+	return Model{backend: Backend{Logs: hub}, screen: screenLogs, width: width, height: height}
 }
 
 func credentialEditorModel(t *testing.T) Model {
