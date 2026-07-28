@@ -233,16 +233,30 @@ func (m Model) viewSettings() string {
 }
 
 func (m Model) help() string {
-	muted := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	width := contentWidth(m.width)
 	switch m.screen {
 	case screenPools:
-		return muted.Render("[/] pool  j/k select  a add key  e edit  x delete  J/K reorder  m current  d disable  z exhausted  v verify  V verify all  p add pool  n rename/interval  X delete pool  q quit")
+		return renderHelp(width,
+			helpBinding{"[[ / ]]", "pool"}, helpBinding{"[j/k]", "select"}, helpBinding{"[a]", "add key"},
+			helpBinding{"[e]", "edit"}, helpBinding{"[x]", "delete"}, helpBinding{"[J/K]", "reorder"},
+			helpBinding{"[m]", "current"}, helpBinding{"[d]", "disable"}, helpBinding{"[z]", "exhausted"},
+			helpBinding{"[v]", "verify"}, helpBinding{"[V]", "verify all"}, helpBinding{"[p]", "add pool"},
+			helpBinding{"[n]", "rename/interval"}, helpBinding{"[X]", "delete pool"}, helpBinding{"[q]", "quit"},
+		)
 	case screenServices:
-		return muted.Render("j/k select  a add  e edit  x delete  r add rule  R delete rule  t test rules  q quit")
+		return renderHelp(width,
+			helpBinding{"[j/k]", "select"}, helpBinding{"[a]", "add"}, helpBinding{"[e]", "edit"},
+			helpBinding{"[x]", "delete"}, helpBinding{"[r]", "add rule"}, helpBinding{"[R]", "delete rule"},
+			helpBinding{"[t]", "test rules"}, helpBinding{"[q]", "quit"},
+		)
 	case screenLogs:
-		return muted.Render("f filter  c clear filter  q quit")
+		return renderHelp(width,
+			helpBinding{"[f]", "filter"}, helpBinding{"[c]", "clear filter"}, helpBinding{"[q]", "quit"},
+		)
 	case screenSettings:
-		return muted.Render("e edit settings  q quit")
+		return renderHelp(width,
+			helpBinding{"[e]", "edit settings"}, helpBinding{"[q]", "quit"},
+		)
 	default:
 		return ""
 	}
@@ -332,7 +346,8 @@ func (m Model) poolAction(key string) (tea.Model, tea.Cmd) {
 	credential := credentialMap(cfg)[id]
 	switch key {
 	case "e":
-		m.openForm("credential", []string{"Name", "Service ID", "API key", "Base URL override"}, []string{credential.Name, credential.ServiceID, "", credential.BaseURLOverride}, index)
+		apiKey := m.backend.Manager.Secrets().APIKeys[id]
+		m.openForm("credential", []string{"Name", "Service ID", "API key", "Base URL override"}, []string{credential.Name, credential.ServiceID, apiKey, credential.BaseURLOverride}, index)
 		m.form.editID = id
 	case "x":
 		if m.confirm != "delete-credential" {
@@ -468,10 +483,7 @@ func (m *Model) openForm(kind string, labels, values []string, editIndex int) {
 		inputs[i].Prompt = ""
 		inputs[i].Placeholder = labels[i]
 		inputs[i].SetValue(values[i])
-		inputs[i].SetWidth(max(20, m.width-30))
-	}
-	if kind == "credential" {
-		inputs[2].EchoMode = textinput.EchoPassword
+		inputs[i].SetWidth(inputWidth(m.width, 30))
 	}
 	inputs[0].Focus()
 	m.form = &form{kind: kind, labels: labels, inputs: inputs, editID: ""}
@@ -479,6 +491,13 @@ func (m *Model) openForm(kind string, labels, values []string, editIndex int) {
 }
 
 func (m Model) updateForm(message tea.Msg) (tea.Model, tea.Cmd) {
+	if size, ok := message.(tea.WindowSizeMsg); ok {
+		m.width, m.height = size.Width, size.Height
+		for i := range m.form.inputs {
+			m.form.inputs[i].SetWidth(inputWidth(size.Width, 30))
+		}
+		return m, nil
+	}
 	if key, ok := message.(tea.KeyPressMsg); ok {
 		switch key.String() {
 		case "esc":
@@ -536,7 +555,10 @@ func (m Model) viewForm() string {
 		lines = append(lines, marker+label.Render(m.form.labels[i])+input.View())
 	}
 	position := fmt.Sprintf("fields %d-%d of %d", start+1, end, len(m.form.inputs))
-	return title + "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(position) + "\n\n" + strings.Join(lines, "\n\n") + "\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("Tab move  Enter save  Esc cancel")
+	help := renderHelp(contentWidth(m.width),
+		helpBinding{"[Tab]", "move"}, helpBinding{"[Enter]", "save"}, helpBinding{"[Esc]", "cancel"},
+	)
+	return title + "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(position) + "\n\n" + strings.Join(lines, "\n\n") + "\n\n" + help
 }
 
 func (m *Model) submitForm() error {
@@ -562,8 +584,9 @@ func (m *Model) submitForm() error {
 				cfg.Credentials[i].Name, cfg.Credentials[i].ServiceID, cfg.Credentials[i].BaseURLOverride = values[0], values[1], values[3]
 			}
 		}
-		if values[2] != "" {
-			secrets.APIKeys[id] = values[2]
+		apiKey := m.form.inputs[2].Value()
+		if apiKey != "" {
+			secrets.APIKeys[id] = apiKey
 		}
 	case "pool":
 		interval, err := time.ParseDuration(values[2])

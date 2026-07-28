@@ -31,7 +31,6 @@ func NewWizard() Wizard {
 		inputs[i].SetValue(defaults[i])
 		inputs[i].SetWidth(48)
 	}
-	inputs[2].EchoMode = textinput.EchoPassword
 	inputs[0].Focus()
 	return Wizard{inputs: inputs}
 }
@@ -43,7 +42,7 @@ func (w Wizard) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		w.width = message.Width
 		for i := range w.inputs {
-			w.inputs[i].SetWidth(max(20, message.Width-32))
+			w.inputs[i].SetWidth(inputWidth(message.Width, 32))
 		}
 	case tea.KeyPressMsg:
 		switch message.String() {
@@ -90,7 +89,9 @@ func (w Wizard) View() tea.View {
 	if w.err != "" {
 		content += "\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render(w.err)
 	}
-	content += "\n\n" + muted.Render("Tab move  Enter continue  Esc cancel")
+	content += "\n\n" + renderHelp(contentWidth(w.width),
+		helpBinding{"[Tab]", "move"}, helpBinding{"[Enter]", "continue"}, helpBinding{"[Esc]", "cancel"},
+	)
 	view := tea.NewView(lipgloss.NewStyle().Padding(1, 2).Render(content))
 	view.AltScreen = true
 	view.WindowTitle = "easy-llm-router setup"
