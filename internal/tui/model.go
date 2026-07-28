@@ -205,24 +205,29 @@ func (m Model) viewServices() string {
 }
 
 func (m Model) viewLogs() string {
-	lines := m.backend.Logs.Lines()
+	entries := m.backend.Logs.Lines()
 	if m.logFilter != "" {
-		lines = slices.DeleteFunc(lines, func(line string) bool { return !strings.Contains(strings.ToLower(line), strings.ToLower(m.logFilter)) })
+		entries = slices.DeleteFunc(entries, func(line string) bool { return !strings.Contains(strings.ToLower(line), strings.ToLower(m.logFilter)) })
 	}
-	limit := max(5, m.height-9)
-	if len(lines) > limit {
-		lines = lines[len(lines)-limit:]
-	}
-	if len(lines) == 0 {
+	if len(entries) == 0 {
 		return "No matching log entries."
 	}
-	maxWidth := max(20, m.width-6)
-	for i := range lines {
-		if len([]rune(lines[i])) > maxWidth {
-			lines[i] = string([]rune(lines[i])[:maxWidth-3]) + "..."
+	budget := max(5, m.height-9)
+	width := max(20, m.width-6)
+	var view []string
+	used := 0
+	for i := len(entries) - 1; i >= 0 && used < budget; i-- {
+		wrapped := strings.Split(lipgloss.Wrap(entries[i], width-2, " "), "\n")
+		for j := 1; j < len(wrapped); j++ {
+			wrapped[j] = "  " + wrapped[j]
 		}
+		if take := budget - used; take < len(wrapped) {
+			wrapped = wrapped[len(wrapped)-take:]
+		}
+		view = append(wrapped, view...)
+		used += len(wrapped)
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(view, "\n")
 }
 
 func (m Model) viewSettings() string {
