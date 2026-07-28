@@ -9,7 +9,10 @@ import (
 
 func TestValidate(t *testing.T) {
 	cfg := Default()
-	cfg.Services = []domain.Service{{ID: "go", Name: "Go", BaseURL: "https://example.com/v1"}}
+	cfg.Services = []domain.Service{{
+		ID: "go", Name: "Go", BaseURL: "https://example.com/v1",
+		Probe: domain.ProbeConfig{Protocol: domain.ProbeOpenAIChat, Model: "test-model"},
+	}}
 	cfg.Credentials = []domain.Credential{{ID: "a", Name: "A", ServiceID: "go"}}
 	cfg.Pools = []domain.Pool{{Name: "main", CredentialIDs: []string{"a"}}}
 	secrets := domain.Secrets{Version: 1, APIKeys: map[string]string{"a": "secret"}}

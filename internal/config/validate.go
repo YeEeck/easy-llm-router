@@ -7,7 +7,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/yeck/easy-llm-router/internal/classify"
 	"github.com/yeck/easy-llm-router/internal/domain"
+	"github.com/yeck/easy-llm-router/internal/probe"
 )
 
 var poolNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
@@ -32,6 +34,12 @@ func Validate(cfg domain.Config, secrets domain.Secrets) error {
 		services[service.ID] = service
 		if parsed, err := url.ParseRequestURI(service.BaseURL); err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			problems = append(problems, fmt.Errorf("service %q has invalid base URL", service.ID))
+		}
+		if err := classify.ValidateRules(service.Rules); err != nil {
+			problems = append(problems, fmt.Errorf("service %q rules: %w", service.ID, err))
+		}
+		if _, err := probe.Build(service.Probe); err != nil {
+			problems = append(problems, fmt.Errorf("service %q probe: %w", service.ID, err))
 		}
 	}
 	credentials := make(map[string]domain.Credential, len(cfg.Credentials))
