@@ -65,13 +65,13 @@ func openCode(id, name, baseURL, quotaType string) domain.Service {
 
 func withOpenCodeHints(service domain.Service) domain.Service {
 	service.RecoveryHint = domain.RecoveryHintConfig{
-		Source:  domain.RecoveryHintFromBody,
-		Pattern: `Resets in (\d+m)`,
-		Parse:   domain.RecoveryHintAsDuration,
+		Source: domain.RecoveryHintFromHeader,
+		Header: "Retry-After",
+		Parse:  domain.RecoveryHintAsSeconds,
 	}
 	service.QuotaEpoch = domain.QuotaEpochConfig{
-		Source:  domain.RecoveryHintFromBody,
-		Pattern: `(\d+-hour|weekly|month) usage limit`,
+		Source:   domain.RecoveryHintFromJSON,
+		JSONPath: "metadata.limitName",
 	}
 	return service
 }

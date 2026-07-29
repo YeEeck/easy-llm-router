@@ -142,13 +142,15 @@ func TestStreamErrorUpdatesStateWithoutRetry(t *testing.T) {
 
 func TestRecoveryHintCapturedOnExhaustedTransition(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Retry-After", "2094")
 		writer.WriteHeader(http.StatusTooManyRequests)
-		_, _ = io.WriteString(writer, `{"error":{"type":"GoUsageLimitError","message":"5-hour usage limit reached. Resets in 21min."}}`)
+		_, _ = io.WriteString(writer, `{"type":"error","error":{"type":"GoUsageLimitError","message":"5-hour usage limit reached. Resets in 35min."},"metadata":{"limitName":"5 hour"}}`)
 	}))
 	defer upstream.Close()
 	manager := routerTestManager(t, upstream.URL)
 	cfg, _ := manager.Snapshot()
-	cfg.Services[0].RecoveryHint = domain.RecoveryHintConfig{Source: domain.RecoveryHintFromBody, Pattern: `Resets in (\d+m)`, Parse: domain.RecoveryHintAsDuration}
+	cfg.Services[0].RecoveryHint = domain.RecoveryHintConfig{Source: domain.RecoveryHintFromHeader, Header: "Retry-After", Parse: domain.RecoveryHintAsSeconds}
+	cfg.Services[0].QuotaEpoch = domain.QuotaEpochConfig{Source: domain.RecoveryHintFromJSON, JSONPath: "metadata.limitName"}
 	if err := manager.ReplaceConfig(cfg, manager.Secrets()); err != nil {
 		t.Fatal(err)
 	}
@@ -164,8 +166,11 @@ func TestRecoveryHintCapturedOnExhaustedTransition(t *testing.T) {
 	if hint.IsZero() {
 		t.Fatalf("recovery hint not captured")
 	}
-	if hint.Before(before) || hint.After(before.Add(22*time.Minute)) {
-		t.Fatalf("recovery hint = %v, expected ~now+21m (before=%v)", hint, before)
+	if hint.Before(before.Add(2000*time.Second)) || hint.After(before.Add(2200*time.Second)) {
+		t.Fatalf("recovery hint = %v, expected ~now+2094s (before=%v)", hint, before)
+	}
+	if epoch := state.Credentials["a"].QuotaEpoch; epoch != "5 hour" {
+		t.Fatalf("quota epoch = %q, want \"5 hour\"", epoch)
 	}
 }
 

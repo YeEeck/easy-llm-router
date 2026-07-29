@@ -9,7 +9,7 @@ import (
 )
 
 func TestExtractRecoveryBodyDurationFromOpenCodeGoSample(t *testing.T) {
-	body := []byte(`{"type":"GoUsageLimitError","message":"5-hour usage limit reached. Resets in 21min. To continue using this model now, enable usage from your available balance."}`)
+	body := []byte(`{"type":"GoUsageLimitError","message":"5-hour usage limit reached. Resets in 35min."}`)
 	cfg := domain.RecoveryHintConfig{
 		Source:  domain.RecoveryHintFromBody,
 		Pattern: `Resets in (\d+m)`,
@@ -20,9 +20,42 @@ func TestExtractRecoveryBodyDurationFromOpenCodeGoSample(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected hint, got none")
 	}
-	want := now.Add(21 * time.Minute)
+	want := now.Add(35 * time.Minute)
 	if !got.Equal(want) {
 		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtractRecoveryHeaderSecondsFromOpenCodeGoSample(t *testing.T) {
+	cfg := domain.RecoveryHintConfig{
+		Source: domain.RecoveryHintFromHeader,
+		Header: "Retry-After",
+		Parse:  domain.RecoveryHintAsSeconds,
+	}
+	now := time.Date(2026, 7, 29, 12, 0, 0, 0, time.UTC)
+	headers := http.Header{"Retry-After": {"2094"}}
+	got, ok := ExtractRecovery(cfg, Response{StatusCode: 429, Header: headers}, now)
+	if !ok {
+		t.Fatalf("expected hint, got none")
+	}
+	want := now.Add(2094 * time.Second)
+	if !got.Equal(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestExtractQuotaEpochJSONLimitNameFromOpenCodeGoSample(t *testing.T) {
+	body := []byte(`{"type":"error","error":{"type":"GoUsageLimitError","message":"5-hour usage limit reached."},"metadata":{"workspace":"wrk_x","limitName":"5 hour"}}`)
+	cfg := domain.QuotaEpochConfig{
+		Source:   domain.RecoveryHintFromJSON,
+		JSONPath: "metadata.limitName",
+	}
+	got, ok := ExtractQuotaEpoch(cfg, Response{StatusCode: 429, Body: body})
+	if !ok {
+		t.Fatalf("expected epoch, got none")
+	}
+	if got != "5 hour" {
+		t.Fatalf("epoch = %q, want \"5 hour\"", got)
 	}
 }
 
