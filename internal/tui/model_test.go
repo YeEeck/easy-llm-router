@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -200,4 +201,58 @@ func credentialEditorModel(t *testing.T) Model {
 			Credentials: filepath.Join(temp, "credentials.yaml"),
 		},
 	})
+}
+
+func TestPoolViewRendersQuotaEpochAndRecoveryHintColumns(t *testing.T) {
+	model := poolViewWithExhaustedCredential(t, 120)
+	rendered := ansi.Strip(model.viewPools())
+
+	if !strings.Contains(rendered, "5-hour") {
+		t.Errorf("pools view missing quota epoch column:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "in 2") || !strings.Contains(rendered, "m") {
+		t.Errorf("pools view missing recovery hint column:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "exhausted") {
+		t.Errorf("pools view missing status:\n%s", rendered)
+	}
+}
+
+func TestPoolViewDropsTimeColumnsAtNarrowWidth(t *testing.T) {
+	narrow := poolViewWithExhaustedCredential(t, 70)
+	rendered := ansi.Strip(narrow.viewPools())
+	if strings.Contains(rendered, "in 2") {
+		t.Errorf("narrow pools view still shows recovery or next-verify hint:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "exhausted") || !strings.Contains(rendered, "5-hour") {
+		t.Errorf("narrow pools view lost status or epoch:\n%s", rendered)
+	}
+}
+
+func poolViewWithExhaustedCredential(t *testing.T, width int) Model {
+	t.Helper()
+	cfg := config.Default()
+	cfg.Services = preset.Builtins()
+	credentialID := "credential-1"
+	cfg.Credentials = []domain.Credential{{ID: credentialID, Name: "primary", ServiceID: preset.OpenCodeGoID}}
+	cfg.Pools = []domain.Pool{{Name: "main", CredentialIDs: []string{credentialID}, VerifyInterval: 5 * time.Minute}}
+	config.ApplyDefaults(&cfg)
+	secrets := domain.Secrets{Version: 1, APIKeys: map[string]string{credentialID: "k"}}
+	recovery := time.Now().Add(21 * time.Minute)
+	state := domain.RuntimeState{
+		Credentials: map[string]domain.CredentialState{credentialID: {
+			Status:       domain.StatusExhausted,
+			Reason:       "quota-root-type",
+			ChangedAt:    time.Now(),
+			NextVerifyAt: time.Now().Add(5 * time.Minute),
+			RecoveryHint: recovery,
+			QuotaEpoch:   "5-hour",
+		}},
+		Current: map[string]string{"main": credentialID},
+	}
+	manager, err := routing.New(cfg, secrets, state, nil)
+	if err != nil {
+		t.Fatalf("create routing manager: %v", err)
+	}
+	return Model{backend: Backend{Manager: manager}, screen: screenPools, width: width, height: 30}
 }

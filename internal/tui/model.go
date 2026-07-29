@@ -169,10 +169,13 @@ func (m Model) viewPools() string {
 	pool := cfg.Pools[min(m.poolIndex, len(cfg.Pools)-1)]
 	endpoint := fmt.Sprintf("http://127.0.0.1:%d/pools/%s", cfg.Settings.Port, pool.Name)
 	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6")).Render(pool.Name) + "  " + endpoint, ""}
+	now := time.Now()
+	budget := contentWidth(m.width)
 	credentials := credentialMap(cfg)
+	showNextVerify, showRecovery := poolColumnBudget(budget)
 	for i, id := range pool.CredentialIDs {
 		credential := credentials[id]
-		status := state.Credentials[id].Status
+		credentialState := state.Credentials[id]
 		marker := "  "
 		if i == m.cursor {
 			marker = "> "
@@ -181,9 +184,63 @@ func (m Model) viewPools() string {
 		if state.Current[pool.Name] == id {
 			current = "*"
 		}
-		lines = append(lines, fmt.Sprintf("%s%s %-22s %-12s %s", marker, current, credential.Name, status, credential.ID))
+		epoch := credentialState.QuotaEpoch
+		if credentialState.Status != domain.StatusExhausted {
+			epoch = ""
+		}
+		nextVerify := ""
+		if showNextVerify && credentialState.Status == domain.StatusExhausted && !credentialState.NextVerifyAt.IsZero() {
+			nextVerify = formatTime(credentialState.NextVerifyAt, now)
+		}
+		recovery := ""
+		if showRecovery && credentialState.Status == domain.StatusExhausted && !credentialState.RecoveryHint.IsZero() && credentialState.RecoveryHint.After(now) {
+			recovery = formatTime(credentialState.RecoveryHint, now)
+		}
+		layout := "%s%s %-22s %-12s %-14s"
+		args := []any{marker, current, credential.Name, credentialState.Status, epoch}
+		if showNextVerify {
+			layout += " %8s"
+			args = append(args, nextVerify)
+		}
+		if showRecovery {
+			layout += " %8s"
+			args = append(args, recovery)
+		}
+		lines = append(lines, fmt.Sprintf(layout, args...))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// poolColumnBudget decides which time columns fit in the budget. Time columns
+// drop from right to left: recovery is dropped first, then next-verify. Name,
+// status and epoch stay visible at any width.
+func poolColumnBudget(width int) (nextVerify, recovery bool) {
+	const (
+		baseWidth      = 2 + 1 + 22 + 1 + 12 + 1 + 14
+		nextVerifyCell = 1 + 8
+		recoveryCell   = 1 + 8
+	)
+	if width >= baseWidth+nextVerifyCell+recoveryCell {
+		return true, true
+	}
+	if width >= baseWidth+nextVerifyCell {
+		return true, false
+	}
+	return false, false
+}
+
+func formatTime(target, now time.Time) string {
+	remaining := target.Sub(now)
+	switch {
+	case remaining < -time.Hour:
+		return "—"
+	case remaining < time.Minute:
+		return fmt.Sprintf("in %ds", int(remaining.Seconds()))
+	case remaining < time.Hour:
+		return fmt.Sprintf("in %dm", int(remaining.Minutes()))
+	default:
+		return fmt.Sprintf("in %dh", int(remaining.Hours()))
+	}
 }
 
 func (m Model) viewServices() string {
