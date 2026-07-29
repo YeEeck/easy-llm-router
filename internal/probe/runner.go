@@ -12,6 +12,7 @@ import (
 
 	"github.com/yeck/easy-llm-router/internal/classify"
 	"github.com/yeck/easy-llm-router/internal/domain"
+	appLog "github.com/yeck/easy-llm-router/internal/logging"
 	"github.com/yeck/easy-llm-router/internal/routing"
 )
 
@@ -86,6 +87,11 @@ func (r *Runner) Validate(ctx context.Context, poolName, credentialID string) (d
 		body = nil
 	}
 	match := classify.Evaluate(selection.Service.Rules, classify.Response{StatusCode: response.StatusCode, Header: response.Header, Body: body})
+	if match.Result != domain.ClassSuccess && r.logger.Enabled(ctx, slog.LevelDebug) {
+		r.logger.Debug("validation error response", "pool", poolName, "credential", credentialID,
+			"headers", appLog.SafeHeaders(response.Header),
+			"error_body", appLog.ErrorPreview(body, 4<<10))
+	}
 	if match.Result == domain.ClassInconclusive {
 		r.reschedule(poolName, credentialID, "inconclusive: "+match.RuleName)
 	} else {
