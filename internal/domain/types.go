@@ -54,6 +54,30 @@ type ResponseRule struct {
 	Conditions []Condition    `yaml:"conditions" json:"conditions"`
 }
 
+type RecoveryHintSource string
+
+const (
+	RecoveryHintFromHeader RecoveryHintSource = "header"
+	RecoveryHintFromJSON   RecoveryHintSource = "json"
+	RecoveryHintFromBody   RecoveryHintSource = "body"
+)
+
+type RecoveryHintParse string
+
+const (
+	RecoveryHintAsDuration RecoveryHintParse = "duration"
+	RecoveryHintAsAbsolute RecoveryHintParse = "absolute"
+	RecoveryHintAsSeconds  RecoveryHintParse = "seconds"
+)
+
+type RecoveryHintConfig struct {
+	Source   RecoveryHintSource `yaml:"source" json:"source"`
+	Header   string             `yaml:"header,omitempty" json:"header,omitempty"`
+	JSONPath string             `yaml:"json_path,omitempty" json:"json_path,omitempty"`
+	Pattern  string             `yaml:"pattern,omitempty" json:"pattern,omitempty"`
+	Parse    RecoveryHintParse  `yaml:"parse" json:"parse"`
+}
+
 type ProbeProtocol string
 
 const (
@@ -73,14 +97,15 @@ type ProbeConfig struct {
 }
 
 type Service struct {
-	ID         string         `yaml:"id" json:"id"`
-	Name       string         `yaml:"name" json:"name"`
-	Preset     string         `yaml:"preset,omitempty" json:"preset,omitempty"`
-	BaseURL    string         `yaml:"base_url" json:"base_url"`
-	AuthHeader string         `yaml:"auth_header,omitempty" json:"auth_header,omitempty"`
-	AuthPrefix string         `yaml:"auth_prefix,omitempty" json:"auth_prefix,omitempty"`
-	Rules      []ResponseRule `yaml:"rules,omitempty" json:"rules,omitempty"`
-	Probe      ProbeConfig    `yaml:"probe" json:"probe"`
+	ID           string             `yaml:"id" json:"id"`
+	Name         string             `yaml:"name" json:"name"`
+	Preset       string             `yaml:"preset,omitempty" json:"preset,omitempty"`
+	BaseURL      string             `yaml:"base_url" json:"base_url"`
+	AuthHeader   string             `yaml:"auth_header,omitempty" json:"auth_header,omitempty"`
+	AuthPrefix   string             `yaml:"auth_prefix,omitempty" json:"auth_prefix,omitempty"`
+	Rules        []ResponseRule     `yaml:"rules,omitempty" json:"rules,omitempty"`
+	RecoveryHint RecoveryHintConfig `yaml:"recovery_hint,omitempty" json:"recovery_hint,omitempty"`
+	Probe        ProbeConfig        `yaml:"probe" json:"probe"`
 }
 
 type Credential struct {
@@ -118,6 +143,7 @@ type CredentialState struct {
 	ChangedAt    time.Time        `json:"changed_at"`
 	Reason       string           `json:"reason,omitempty"`
 	NextVerifyAt time.Time        `json:"next_verify_at,omitempty"`
+	RecoveryHint time.Time        `json:"recovery_hint,omitempty"`
 }
 
 type RuntimeState struct {

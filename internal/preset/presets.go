@@ -11,7 +11,11 @@ const (
 
 func Builtins() []domain.Service {
 	return []domain.Service{
-		openCode(OpenCodeGoID, "OpenCode Go", "https://opencode.ai/zen/go/v1", "GoUsageLimitError"),
+		withRecoveryHint(openCode(OpenCodeGoID, "OpenCode Go", "https://opencode.ai/zen/go/v1", "GoUsageLimitError"), domain.RecoveryHintConfig{
+			Source:  domain.RecoveryHintFromBody,
+			Pattern: `Resets in (\d+m)`,
+			Parse:   domain.RecoveryHintAsDuration,
+		}),
 		openCode(OpenCodeZenID, "OpenCode Zen", "https://opencode.ai/zen/v1", "FreeUsageLimitError"),
 		{
 			ID:         OpenAIID,
@@ -61,6 +65,11 @@ func openCode(id, name, baseURL, quotaType string) domain.Service {
 			Model:    "glm-5",
 		},
 	}
+}
+
+func withRecoveryHint(service domain.Service, hint domain.RecoveryHintConfig) domain.Service {
+	service.RecoveryHint = hint
+	return service
 }
 
 func authenticationRules() []domain.ResponseRule {

@@ -38,6 +38,9 @@ func Validate(cfg domain.Config, secrets domain.Secrets) error {
 		if err := classify.ValidateRules(service.Rules); err != nil {
 			problems = append(problems, fmt.Errorf("service %q rules: %w", service.ID, err))
 		}
+		if err := classify.ValidateRecoveryHint(service.RecoveryHint); err != nil {
+			problems = append(problems, fmt.Errorf("service %q recovery hint: %w", service.ID, err))
+		}
 		if _, err := probe.Build(service.Probe); err != nil {
 			problems = append(problems, fmt.Errorf("service %q probe: %w", service.ID, err))
 		}
