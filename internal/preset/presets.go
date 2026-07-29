@@ -76,11 +76,35 @@ func withOpenCodeHints(service domain.Service) domain.Service {
 	return service
 }
 
+// legacyRecoveryHintDefaults records prior builtin RecoveryHint defaults per
+// preset, so ApplyServiceDefaults can upgrade existing config files written by
+// older releases. Service configs matching a legacy entry are silently
+// upgraded to the current builtin default; anything else (including user
+// customisation) is preserved verbatim.
+var legacyRecoveryHintDefaults = map[string][]domain.RecoveryHintConfig{
+	OpenCodeGoID: {{
+		Source:  domain.RecoveryHintFromBody,
+		Pattern: `Resets in (\d+m)`,
+		Parse:   domain.RecoveryHintAsDuration,
+	}},
+}
+
+var legacyQuotaEpochDefaults = map[string][]domain.QuotaEpochConfig{
+	OpenCodeGoID: {{
+		Source:  domain.RecoveryHintFromBody,
+		Pattern: `(\d+-hour|weekly|month) usage limit`,
+	}},
+}
+
 // ApplyServiceDefaults fills in RecoveryHint and QuotaEpoch for services that
-// reference a known preset by ID and have not customized those fields. Other
-// fields (model, rules, auth, base URL) are preserved as the user set them.
-// Services without a preset reference, or referencing an unknown preset, are
-// left untouched so custom services stay verbatim.
+// reference a known preset by ID and have not customized those fields. A
+// field whose current value matches a known legacy builtin default is also
+// upgraded to the current builtin value, so already-deployed configs migrate
+// automatically when a preset's RecoveryHint/QuotaEpoch changes. Other
+// fields (model, rules, auth, base URL) and any genuinely customised
+// RecoveryHint/QuotaEpoch are preserved as the user set them. Services
+// without a preset reference, or referencing an unknown preset, are left
+// untouched so custom services stay verbatim.
 func ApplyServiceDefaults(service *domain.Service) {
 	if service.Preset == "" {
 		return
@@ -89,14 +113,40 @@ func ApplyServiceDefaults(service *domain.Service) {
 		if builtin.ID != service.Preset {
 			continue
 		}
-		if service.RecoveryHint.Source == "" && service.RecoveryHint.Parse == "" {
-			service.RecoveryHint = builtin.RecoveryHint
-		}
-		if service.QuotaEpoch.Source == "" {
-			service.QuotaEpoch = builtin.QuotaEpoch
-		}
+		service.RecoveryHint = upgradeRecoveryHint(service.Preset, service.RecoveryHint, builtin.RecoveryHint)
+		service.QuotaEpoch = upgradeQuotaEpoch(service.Preset, service.QuotaEpoch, builtin.QuotaEpoch)
 		return
 	}
+}
+
+func upgradeRecoveryHint(presetID string, current, latest domain.RecoveryHintConfig) domain.RecoveryHintConfig {
+	if current == latest {
+		return latest
+	}
+	if current.Source == "" && current.Parse == "" {
+		return latest
+	}
+	for _, legacy := range legacyRecoveryHintDefaults[presetID] {
+		if current == legacy {
+			return latest
+		}
+	}
+	return current
+}
+
+func upgradeQuotaEpoch(presetID string, current, latest domain.QuotaEpochConfig) domain.QuotaEpochConfig {
+	if current == latest {
+		return latest
+	}
+	if current.Source == "" {
+		return latest
+	}
+	for _, legacy := range legacyQuotaEpochDefaults[presetID] {
+		if current == legacy {
+			return latest
+		}
+	}
+	return current
 }
 
 func authenticationRules() []domain.ResponseRule {

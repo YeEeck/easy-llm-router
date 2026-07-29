@@ -76,3 +76,53 @@ func TestApplyServiceDefaultsLeavesUnknownPresetUntouched(t *testing.T) {
 		t.Fatalf("unknown preset service was modified by preset backfill: %#v", existing)
 	}
 }
+
+func TestApplyServiceDefaultsUpgradesLegacyRecoveryHintAndQuotaEpoch(t *testing.T) {
+	legacy := domain.Service{
+		ID:      "opencode-go",
+		Preset:  OpenCodeGoID,
+		BaseURL: "https://opencode.ai/zen/go/v1",
+		RecoveryHint: domain.RecoveryHintConfig{
+			Source:  domain.RecoveryHintFromBody,
+			Pattern: `Resets in (\d+m)`,
+			Parse:   domain.RecoveryHintAsDuration,
+		},
+		QuotaEpoch: domain.QuotaEpochConfig{
+			Source:  domain.RecoveryHintFromBody,
+			Pattern: `(\d+-hour|weekly|month) usage limit`,
+		},
+	}
+	ApplyServiceDefaults(&legacy)
+	builtin := withOpenCodeHints(openCode(OpenCodeGoID, "OpenCode Go", "https://opencode.ai/zen/go/v1", "GoUsageLimitError"))
+	if legacy.RecoveryHint != builtin.RecoveryHint {
+		t.Fatalf("legacy recovery hint was not upgraded: %#v", legacy.RecoveryHint)
+	}
+	if legacy.QuotaEpoch != builtin.QuotaEpoch {
+		t.Fatalf("legacy quota epoch was not upgraded: %#v", legacy.QuotaEpoch)
+	}
+	if legacy.BaseURL != "https://opencode.ai/zen/go/v1" {
+		t.Fatalf("upgrade clobbered base URL: %#v", legacy.BaseURL)
+	}
+}
+
+func TestApplyServiceDefaultsUpgradesLegacyEvenWhenOtherCustomizationPresent(t *testing.T) {
+	legacy := domain.Service{
+		ID:      "opencode-go",
+		Preset:  OpenCodeGoID,
+		BaseURL: "https://opencode.ai/zen/go/v1",
+		Probe:   domain.ProbeConfig{Protocol: domain.ProbeOpenAIChat, Model: "deepseek-v4-flash"},
+		RecoveryHint: domain.RecoveryHintConfig{
+			Source:  domain.RecoveryHintFromBody,
+			Pattern: `Resets in (\d+m)`,
+			Parse:   domain.RecoveryHintAsDuration,
+		},
+	}
+	ApplyServiceDefaults(&legacy)
+	builtin := withOpenCodeHints(openCode(OpenCodeGoID, "OpenCode Go", "https://opencode.ai/zen/go/v1", "GoUsageLimitError"))
+	if legacy.RecoveryHint != builtin.RecoveryHint {
+		t.Fatalf("legacy recovery hint not upgraded in presence of other customization: %#v", legacy.RecoveryHint)
+	}
+	if legacy.Probe.Model != "deepseek-v4-flash" {
+		t.Fatalf("upgrade clobbered user-customized probe model: %#v", legacy.Probe.Model)
+	}
+}
