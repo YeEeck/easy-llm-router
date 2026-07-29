@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/yeck/easy-llm-router/internal/domain"
+	"github.com/yeck/easy-llm-router/internal/preset"
 )
 
 const (
@@ -54,5 +55,8 @@ func ApplyDefaults(cfg *domain.Config) {
 		if cfg.Pools[i].VerifyInterval == 0 {
 			cfg.Pools[i].VerifyInterval = 5 * time.Minute
 		}
+	}
+	for i := range cfg.Services {
+		preset.ApplyServiceDefaults(&cfg.Services[i])
 	}
 }

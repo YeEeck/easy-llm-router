@@ -18,3 +18,61 @@ func TestOpenCodeRulesAreConservative(t *testing.T) {
 		t.Fatalf("provider limit classified as %q", providerLimit.Result)
 	}
 }
+
+func TestApplyServiceDefaultsBackfillsRecoveryHintAndQuotaEpochForKnownPreset(t *testing.T) {
+	existing := domain.Service{
+		ID:      "opencode-go",
+		Preset:  OpenCodeGoID,
+		BaseURL: "https://opencode.ai/zen/go/v1",
+		Probe:   domain.ProbeConfig{Protocol: domain.ProbeOpenAIChat, Model: "deepseek-v4-flash"},
+	}
+	ApplyServiceDefaults(&existing)
+	if existing.RecoveryHint.Source == "" {
+		t.Fatalf("recovery hint was not backfilled for preset %q", OpenCodeGoID)
+	}
+	if existing.QuotaEpoch.Source == "" {
+		t.Fatalf("quota epoch was not backfilled for preset %q", OpenCodeGoID)
+	}
+	if existing.Probe.Model != "deepseek-v4-flash" {
+		t.Fatalf("preset backfill clobbered user-customized probe model: %q", existing.Probe.Model)
+	}
+}
+
+func TestApplyServiceDefaultsPreservesCustomizedRecoveryHint(t *testing.T) {
+	custom := domain.RecoveryHintConfig{Source: domain.RecoveryHintFromHeader, Header: "X-Recovery", Parse: domain.RecoveryHintAsSeconds}
+	existing := domain.Service{
+		ID:           "opencode-go",
+		Preset:       OpenCodeGoID,
+		RecoveryHint: custom,
+	}
+	ApplyServiceDefaults(&existing)
+	if existing.RecoveryHint.Source != domain.RecoveryHintFromHeader || existing.RecoveryHint.Header != "X-Recovery" {
+		t.Fatalf("preset backfill overwrote user-customized recovery hint: %#v", existing.RecoveryHint)
+	}
+	if existing.QuotaEpoch.Source == "" {
+		t.Fatalf("preset backfill did not fill quota epoch when only recovery hint was customized")
+	}
+}
+
+func TestApplyServiceDefaultsLeavesCustomServicesUntouched(t *testing.T) {
+	custom := domain.Service{
+		ID:      "custom",
+		Preset:  "",
+		BaseURL: "https://example.com/v1",
+	}
+	ApplyServiceDefaults(&custom)
+	if custom.RecoveryHint.Source != "" || custom.QuotaEpoch.Source != "" {
+		t.Fatalf("custom service was modified by preset backfill: %#v", custom)
+	}
+}
+
+func TestApplyServiceDefaultsLeavesUnknownPresetUntouched(t *testing.T) {
+	existing := domain.Service{
+		ID:     "self-hosted",
+		Preset: "unknown-preset",
+	}
+	ApplyServiceDefaults(&existing)
+	if existing.RecoveryHint.Source != "" || existing.QuotaEpoch.Source != "" {
+		t.Fatalf("unknown preset service was modified by preset backfill: %#v", existing)
+	}
+}

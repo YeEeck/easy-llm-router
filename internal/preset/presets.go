@@ -76,6 +76,29 @@ func withOpenCodeHints(service domain.Service) domain.Service {
 	return service
 }
 
+// ApplyServiceDefaults fills in RecoveryHint and QuotaEpoch for services that
+// reference a known preset by ID and have not customized those fields. Other
+// fields (model, rules, auth, base URL) are preserved as the user set them.
+// Services without a preset reference, or referencing an unknown preset, are
+// left untouched so custom services stay verbatim.
+func ApplyServiceDefaults(service *domain.Service) {
+	if service.Preset == "" {
+		return
+	}
+	for _, builtin := range Builtins() {
+		if builtin.ID != service.Preset {
+			continue
+		}
+		if service.RecoveryHint.Source == "" && service.RecoveryHint.Parse == "" {
+			service.RecoveryHint = builtin.RecoveryHint
+		}
+		if service.QuotaEpoch.Source == "" {
+			service.QuotaEpoch = builtin.QuotaEpoch
+		}
+		return
+	}
+}
+
 func authenticationRules() []domain.ResponseRule {
 	return []domain.ResponseRule{{
 		Name:   "http-authentication-failed",
