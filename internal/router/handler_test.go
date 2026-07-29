@@ -73,7 +73,7 @@ func TestExhaustedCurrentCanRecoverAsLastResort(t *testing.T) {
 	defer upstream.Close()
 	manager := routerTestManager(t, upstream.URL)
 	for _, id := range []string{"a", "b"} {
-		if err := manager.Transition("main", id, domain.ClassExhausted, "quota", time.Time{}); err != nil {
+		if err := manager.Transition("main", id, domain.ClassExhausted, "quota", time.Time{}, ""); err != nil {
 			t.Fatal(err)
 		}
 	}

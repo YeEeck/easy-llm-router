@@ -78,6 +78,13 @@ type RecoveryHintConfig struct {
 	Parse    RecoveryHintParse  `yaml:"parse" json:"parse"`
 }
 
+type QuotaEpochConfig struct {
+	Source   RecoveryHintSource `yaml:"source" json:"source"`
+	Header   string             `yaml:"header,omitempty" json:"header,omitempty"`
+	JSONPath string             `yaml:"json_path,omitempty" json:"json_path,omitempty"`
+	Pattern  string             `yaml:"pattern,omitempty" json:"pattern,omitempty"`
+}
+
 type ProbeProtocol string
 
 const (
@@ -105,6 +112,7 @@ type Service struct {
 	AuthPrefix   string             `yaml:"auth_prefix,omitempty" json:"auth_prefix,omitempty"`
 	Rules        []ResponseRule     `yaml:"rules,omitempty" json:"rules,omitempty"`
 	RecoveryHint RecoveryHintConfig `yaml:"recovery_hint,omitempty" json:"recovery_hint,omitempty"`
+	QuotaEpoch   QuotaEpochConfig   `yaml:"quota_epoch,omitempty" json:"quota_epoch,omitempty"`
 	Probe        ProbeConfig        `yaml:"probe" json:"probe"`
 }
 
@@ -144,6 +152,7 @@ type CredentialState struct {
 	Reason         string           `json:"reason,omitempty"`
 	NextVerifyAt   time.Time        `json:"next_verify_at,omitempty"`
 	RecoveryHint   time.Time        `json:"recovery_hint,omitempty"`
+	QuotaEpoch     string           `json:"quota_epoch,omitempty"`
 	LastValidation string           `json:"last_validation,omitempty"`
 }
 

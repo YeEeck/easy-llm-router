@@ -122,3 +122,54 @@ func TestValidateRecoveryHintRejectsBadPattern(t *testing.T) {
 		t.Fatalf("expected error for invalid regex")
 	}
 }
+
+func TestExtractQuotaEpochBodyPatternFromOpenCodeGoSample(t *testing.T) {
+	body := []byte(`{"error":{"type":"GoUsageLimitError","message":"5-hour usage limit reached. Resets in 21min."}}`)
+	cfg := domain.QuotaEpochConfig{
+		Source:  domain.RecoveryHintFromBody,
+		Pattern: `(\d+-hour) usage limit`,
+	}
+	got, ok := ExtractQuotaEpoch(cfg, Response{StatusCode: 429, Body: body})
+	if !ok {
+		t.Fatalf("expected epoch, got none")
+	}
+	if got != "5-hour" {
+		t.Fatalf("epoch = %q, want 5-hour", got)
+	}
+}
+
+func TestExtractQuotaEpochHeader(t *testing.T) {
+	cfg := domain.QuotaEpochConfig{Source: domain.RecoveryHintFromHeader, Header: "X-Quota-Epoch"}
+	got, ok := ExtractQuotaEpoch(cfg, Response{StatusCode: 429, Header: http.Header{"X-Quota-Epoch": {"weekly"}}})
+	if !ok {
+		t.Fatalf("expected epoch, got none")
+	}
+	if got != "weekly" {
+		t.Fatalf("epoch = %q, want weekly", got)
+	}
+}
+
+func TestExtractQuotaEpochPatternNoMatch(t *testing.T) {
+	cfg := domain.QuotaEpochConfig{Source: domain.RecoveryHintFromBody, Pattern: `(\d+-hour) usage limit`}
+	if _, ok := ExtractQuotaEpoch(cfg, Response{StatusCode: 429, Body: []byte(`{"error":{"type":"FreeUsageLimitError"}}`)}); ok {
+		t.Fatalf("expected no epoch when pattern misses")
+	}
+}
+
+func TestValidateQuotaEpochAcceptsEmpty(t *testing.T) {
+	if err := ValidateQuotaEpoch(domain.QuotaEpochConfig{}); err != nil {
+		t.Fatalf("empty config should be valid, got %v", err)
+	}
+}
+
+func TestValidateQuotaEpochRejectsMissingSourceField(t *testing.T) {
+	if err := ValidateQuotaEpoch(domain.QuotaEpochConfig{Source: domain.RecoveryHintFromHeader}); err == nil {
+		t.Fatalf("expected error when header source lacks header name")
+	}
+}
+
+func TestValidateQuotaEpochRejectsBadPattern(t *testing.T) {
+	if err := ValidateQuotaEpoch(domain.QuotaEpochConfig{Source: domain.RecoveryHintFromBody, Pattern: `(unbalanced`}); err == nil {
+		t.Fatalf("expected error for invalid regex")
+	}
+}

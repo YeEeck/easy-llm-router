@@ -11,11 +11,7 @@ const (
 
 func Builtins() []domain.Service {
 	return []domain.Service{
-		withRecoveryHint(openCode(OpenCodeGoID, "OpenCode Go", "https://opencode.ai/zen/go/v1", "GoUsageLimitError"), domain.RecoveryHintConfig{
-			Source:  domain.RecoveryHintFromBody,
-			Pattern: `Resets in (\d+m)`,
-			Parse:   domain.RecoveryHintAsDuration,
-		}),
+		withOpenCodeHints(openCode(OpenCodeGoID, "OpenCode Go", "https://opencode.ai/zen/go/v1", "GoUsageLimitError")),
 		openCode(OpenCodeZenID, "OpenCode Zen", "https://opencode.ai/zen/v1", "FreeUsageLimitError"),
 		{
 			ID:         OpenAIID,
@@ -67,8 +63,16 @@ func openCode(id, name, baseURL, quotaType string) domain.Service {
 	}
 }
 
-func withRecoveryHint(service domain.Service, hint domain.RecoveryHintConfig) domain.Service {
-	service.RecoveryHint = hint
+func withOpenCodeHints(service domain.Service) domain.Service {
+	service.RecoveryHint = domain.RecoveryHintConfig{
+		Source:  domain.RecoveryHintFromBody,
+		Pattern: `Resets in (\d+m)`,
+		Parse:   domain.RecoveryHintAsDuration,
+	}
+	service.QuotaEpoch = domain.QuotaEpochConfig{
+		Source:  domain.RecoveryHintFromBody,
+		Pattern: `(\d+-hour|weekly|month) usage limit`,
+	}
 	return service
 }
 

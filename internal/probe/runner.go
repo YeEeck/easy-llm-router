@@ -89,8 +89,10 @@ func (r *Runner) Validate(ctx context.Context, poolName, credentialID string) (d
 	if match.Result == domain.ClassInconclusive {
 		r.reschedule(poolName, credentialID, "inconclusive: "+match.RuleName)
 	} else {
-		recoveryHint, _ := classify.ExtractRecovery(selection.Service.RecoveryHint, classify.Response{StatusCode: response.StatusCode, Header: response.Header, Body: body}, time.Now())
-		if err := r.manager.Transition(poolName, credentialID, match.Result, match.RuleName, recoveryHint); err != nil {
+		matchResponse := classify.Response{StatusCode: response.StatusCode, Header: response.Header, Body: body}
+		recoveryHint, _ := classify.ExtractRecovery(selection.Service.RecoveryHint, matchResponse, time.Now())
+		quotaEpoch, _ := classify.ExtractQuotaEpoch(selection.Service.QuotaEpoch, matchResponse)
+		if err := r.manager.Transition(poolName, credentialID, match.Result, match.RuleName, recoveryHint, quotaEpoch); err != nil {
 			return match.Result, err
 		}
 	}

@@ -79,7 +79,7 @@ func (m *Manager) Next(poolName, failedID string, attempted map[string]bool) (Se
 	return m.selectionLocked(pool, id, false)
 }
 
-func (m *Manager) Transition(poolName, credentialID string, result domain.Classification, reason string, recoveryHint time.Time) error {
+func (m *Manager) Transition(poolName, credentialID string, result domain.Classification, reason string, recoveryHint time.Time, quotaEpoch string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	current := m.state.Credentials[credentialID]
@@ -104,12 +104,14 @@ func (m *Manager) Transition(poolName, credentialID string, result domain.Classi
 	current.Reason = reason
 	if status == domain.StatusExhausted {
 		current.RecoveryHint = recoveryHint
+		current.QuotaEpoch = quotaEpoch
 		if pool, ok := m.poolLocked(poolName); ok {
 			current.NextVerifyAt = current.ChangedAt.Add(pool.VerifyInterval)
 		}
 	} else {
 		current.NextVerifyAt = time.Time{}
 		current.RecoveryHint = time.Time{}
+		current.QuotaEpoch = ""
 		current.LastValidation = ""
 	}
 	m.state.Credentials[credentialID] = current
@@ -134,6 +136,7 @@ func (m *Manager) SetStatus(poolName, credentialID string, status domain.Credent
 	state.Reason = reason
 	state.NextVerifyAt = time.Time{}
 	state.RecoveryHint = time.Time{}
+	state.QuotaEpoch = ""
 	state.LastValidation = ""
 	if status == domain.StatusExhausted {
 		if pool, ok := m.poolLocked(poolName); ok {

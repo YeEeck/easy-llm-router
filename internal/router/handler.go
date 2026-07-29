@@ -204,7 +204,8 @@ func (h *Handler) streamResponse(writer http.ResponseWriter, response *http.Resp
 
 func (h *Handler) transition(poolName string, selection routing.Selection, match classify.Match, matchResponse classify.Response, requestID string) {
 	recoveryHint, _ := classify.ExtractRecovery(selection.Service.RecoveryHint, matchResponse, time.Now())
-	if err := h.manager.Transition(poolName, selection.Credential.ID, match.Result, match.RuleName, recoveryHint); err != nil {
+	quotaEpoch, _ := classify.ExtractQuotaEpoch(selection.Service.QuotaEpoch, matchResponse)
+	if err := h.manager.Transition(poolName, selection.Credential.ID, match.Result, match.RuleName, recoveryHint, quotaEpoch); err != nil {
 		h.logger.Error("persist credential transition", "request_id", requestID, "credential", selection.Credential.ID, "error", err)
 	}
 }

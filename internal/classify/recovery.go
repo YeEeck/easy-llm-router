@@ -123,3 +123,61 @@ func ValidateRecoveryHint(cfg domain.RecoveryHintConfig) error {
 	}
 	return nil
 }
+
+// ExtractQuotaEpoch reads the upstream response against a service's quota
+// epoch config and returns the captured epoch label (e.g. "5-hour", "weekly",
+// "month"). Returns false when no config is set, no value is present, or the
+// pattern does not match.
+func ExtractQuotaEpoch(cfg domain.QuotaEpochConfig, response Response) (string, bool) {
+	if cfg.Source == "" {
+		return "", false
+	}
+	raw, ok := extractHintValue(domain.RecoveryHintConfig{Source: cfg.Source, Header: cfg.Header, JSONPath: cfg.JSONPath}, response)
+	if !ok {
+		return "", false
+	}
+	if cfg.Pattern != "" {
+		re, err := regexp.Compile(cfg.Pattern)
+		if err != nil {
+			return "", false
+		}
+		match := re.FindStringSubmatch(raw)
+		if match == nil {
+			return "", false
+		}
+		if len(match) > 1 {
+			return match[1], true
+		}
+		return match[0], true
+	}
+	return raw, true
+}
+
+// ValidateQuotaEpoch checks that a service's quota epoch config is well
+// formed. An empty config means the service does not capture an epoch.
+func ValidateQuotaEpoch(cfg domain.QuotaEpochConfig) error {
+	empty := cfg.Source == "" && cfg.Header == "" && cfg.JSONPath == "" && cfg.Pattern == ""
+	if empty {
+		return nil
+	}
+	switch cfg.Source {
+	case domain.RecoveryHintFromHeader:
+		if cfg.Header == "" {
+			return errors.New("quota epoch source header requires header name")
+		}
+	case domain.RecoveryHintFromJSON:
+		if cfg.JSONPath == "" {
+			return errors.New("quota epoch source json requires json_path")
+		}
+	case domain.RecoveryHintFromBody:
+		// body source reads the whole response body, no extra field required
+	default:
+		return fmt.Errorf("quota epoch source %q is invalid", cfg.Source)
+	}
+	if cfg.Pattern != "" {
+		if _, err := regexp.Compile(cfg.Pattern); err != nil {
+			return fmt.Errorf("quota epoch pattern: %w", err)
+		}
+	}
+	return nil
+}
