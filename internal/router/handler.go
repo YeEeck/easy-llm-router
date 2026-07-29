@@ -111,7 +111,7 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 				"credential", selection.Credential.ID, "headers", appLog.SafeHeaders(response.Header),
 				"error_body", appLog.ErrorPreview(prefix, 4<<10))
 		}
-		h.transition(poolName, selection.Credential.ID, match, requestID)
+		h.transition(poolName, selection, match, classify.Response{StatusCode: response.StatusCode, Header: response.Header, Body: matchBody}, requestID)
 		canRetry := body.Replayable() && !selection.LastResort && (match.Result == domain.ClassExhausted || match.Result == domain.ClassInvalid)
 		if canRetry {
 			next, nextErr := h.manager.Next(poolName, selection.Credential.ID, attempted)
@@ -197,14 +197,15 @@ func (h *Handler) streamResponse(writer http.ResponseWriter, response *http.Resp
 		}
 	}
 	match := classify.Evaluate(selection.Service.Rules, classify.Response{StatusCode: response.StatusCode, Header: response.Header, Body: collected.Bytes()})
-	h.transition(poolName, selection.Credential.ID, match, requestID)
+	h.transition(poolName, selection, match, classify.Response{StatusCode: response.StatusCode, Header: response.Header, Body: collected.Bytes()}, requestID)
 	h.logger.Info("stream complete", "request_id", requestID, "pool", poolName,
 		"credential", selection.Credential.ID, "status", response.StatusCode, "classification", match.Result, "rule", match.RuleName)
 }
 
-func (h *Handler) transition(poolName, credentialID string, match classify.Match, requestID string) {
-	if err := h.manager.Transition(poolName, credentialID, match.Result, match.RuleName); err != nil {
-		h.logger.Error("persist credential transition", "request_id", requestID, "credential", credentialID, "error", err)
+func (h *Handler) transition(poolName string, selection routing.Selection, match classify.Match, matchResponse classify.Response, requestID string) {
+	recoveryHint, _ := classify.ExtractRecovery(selection.Service.RecoveryHint, matchResponse, time.Now())
+	if err := h.manager.Transition(poolName, selection.Credential.ID, match.Result, match.RuleName, recoveryHint); err != nil {
+		h.logger.Error("persist credential transition", "request_id", requestID, "credential", selection.Credential.ID, "error", err)
 	}
 }
 

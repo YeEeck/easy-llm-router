@@ -73,7 +73,7 @@ func TestExhaustedCurrentCanRecoverAsLastResort(t *testing.T) {
 	defer upstream.Close()
 	manager := routerTestManager(t, upstream.URL)
 	for _, id := range []string{"a", "b"} {
-		if err := manager.Transition("main", id, domain.ClassExhausted, "quota"); err != nil {
+		if err := manager.Transition("main", id, domain.ClassExhausted, "quota", time.Time{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -137,6 +137,35 @@ func TestStreamErrorUpdatesStateWithoutRetry(t *testing.T) {
 	_, state := manager.Snapshot()
 	if requests != 1 || state.Credentials["a"].Status != domain.StatusExhausted || !strings.Contains(response.Body.String(), "quota-reached") {
 		t.Fatalf("requests=%d state=%#v response=%q", requests, state, response.Body.String())
+	}
+}
+
+func TestRecoveryHintCapturedOnExhaustedTransition(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(writer, `{"error":{"type":"GoUsageLimitError","message":"5-hour usage limit reached. Resets in 21min."}}`)
+	}))
+	defer upstream.Close()
+	manager := routerTestManager(t, upstream.URL)
+	cfg, _ := manager.Snapshot()
+	cfg.Services[0].RecoveryHint = domain.RecoveryHintConfig{Source: domain.RecoveryHintFromBody, Pattern: `Resets in (\d+m)`, Parse: domain.RecoveryHintAsDuration}
+	if err := manager.ReplaceConfig(cfg, manager.Secrets()); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(Options{Manager: manager, ReplayMemoryLimit: 1024, ReplayLimit: 2048, ResponseInspectLimit: 4096, TempDir: t.TempDir(), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	before := time.Now()
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "http://router/pools/main/chat", strings.NewReader("{}")))
+	_, state := manager.Snapshot()
+	if response.Code != http.StatusTooManyRequests {
+		t.Fatalf("response code=%d, want %d", response.Code, http.StatusTooManyRequests)
+	}
+	hint := state.Credentials["a"].RecoveryHint
+	if hint.IsZero() {
+		t.Fatalf("recovery hint not captured")
+	}
+	if hint.Before(before) || hint.After(before.Add(22*time.Minute)) {
+		t.Fatalf("recovery hint = %v, expected ~now+21m (before=%v)", hint, before)
 	}
 }
 

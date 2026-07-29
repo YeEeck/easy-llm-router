@@ -36,7 +36,7 @@ func TestStickyFailover(t *testing.T) {
 	if err != nil || first.Credential.ID != "a" {
 		t.Fatalf("first = %#v, %v", first, err)
 	}
-	if err := manager.Transition("main", "a", domain.ClassExhausted, "quota"); err != nil {
+	if err := manager.Transition("main", "a", domain.ClassExhausted, "quota", time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 	next, err := manager.Next("main", "a", map[string]bool{"a": true})
@@ -52,7 +52,7 @@ func TestStickyFailover(t *testing.T) {
 func TestExhaustedCurrentIsLastResort(t *testing.T) {
 	manager := testManager(t)
 	for _, id := range []string{"a", "b", "c"} {
-		if err := manager.Transition("main", id, domain.ClassExhausted, "quota"); err != nil {
+		if err := manager.Transition("main", id, domain.ClassExhausted, "quota", time.Time{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -71,5 +71,52 @@ func TestDisabledIsNeverLastResort(t *testing.T) {
 	}
 	if _, err := manager.Start("main", map[string]bool{}); err == nil {
 		t.Fatal("expected no credential")
+	}
+}
+
+func TestScheduleNextVerificationPreservesReason(t *testing.T) {
+	manager := testManager(t)
+	if err := manager.Transition("main", "a", domain.ClassExhausted, "quota-root-type", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.ScheduleNextVerification("main", "a", "inconclusive: default-inconclusive"); err != nil {
+		t.Fatal(err)
+	}
+	_, state := manager.Snapshot()
+	if got := state.Credentials["a"].Reason; got != "quota-root-type" {
+		t.Fatalf("reason = %q, want quota-root-type (probe must not overwrite trigger reason)", got)
+	}
+	if got := state.Credentials["a"].LastValidation; got != "inconclusive: default-inconclusive" {
+		t.Fatalf("last_validation = %q, want inconclusive note", got)
+	}
+}
+
+func TestTransitionRecoveryHintAttachedOnExhausted(t *testing.T) {
+	manager := testManager(t)
+	parsed := time.Date(2026, 7, 29, 12, 21, 0, 0, time.UTC)
+	if err := manager.Transition("main", "a", domain.ClassExhausted, "quota", parsed); err != nil {
+		t.Fatal(err)
+	}
+	_, state := manager.Snapshot()
+	if got := state.Credentials["a"].RecoveryHint; !got.Equal(parsed) {
+		t.Fatalf("recovery_hint = %v, want %v", got, parsed)
+	}
+}
+
+func TestTransitionRecoveryHintClearedOnSuccess(t *testing.T) {
+	manager := testManager(t)
+	parsed := time.Date(2026, 7, 29, 12, 21, 0, 0, time.UTC)
+	if err := manager.Transition("main", "a", domain.ClassExhausted, "quota", parsed); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Transition("main", "a", domain.ClassSuccess, "ok", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	_, state := manager.Snapshot()
+	if got := state.Credentials["a"].RecoveryHint; !got.IsZero() {
+		t.Fatalf("recovery_hint = %v, want zero on success transition", got)
+	}
+	if got := state.Credentials["a"].LastValidation; got != "" {
+		t.Fatalf("last_validation = %q, want cleared on success", got)
 	}
 }

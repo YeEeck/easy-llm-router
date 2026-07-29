@@ -79,7 +79,7 @@ func (m *Manager) Next(poolName, failedID string, attempted map[string]bool) (Se
 	return m.selectionLocked(pool, id, false)
 }
 
-func (m *Manager) Transition(poolName, credentialID string, result domain.Classification, reason string) error {
+func (m *Manager) Transition(poolName, credentialID string, result domain.Classification, reason string, recoveryHint time.Time) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	current := m.state.Credentials[credentialID]
@@ -103,11 +103,14 @@ func (m *Manager) Transition(poolName, credentialID string, result domain.Classi
 	current.ChangedAt = m.now().UTC()
 	current.Reason = reason
 	if status == domain.StatusExhausted {
+		current.RecoveryHint = recoveryHint
 		if pool, ok := m.poolLocked(poolName); ok {
 			current.NextVerifyAt = current.ChangedAt.Add(pool.VerifyInterval)
 		}
 	} else {
 		current.NextVerifyAt = time.Time{}
+		current.RecoveryHint = time.Time{}
+		current.LastValidation = ""
 	}
 	m.state.Credentials[credentialID] = current
 	return m.persistLocked()
@@ -130,6 +133,8 @@ func (m *Manager) SetStatus(poolName, credentialID string, status domain.Credent
 	state.ChangedAt = m.now().UTC()
 	state.Reason = reason
 	state.NextVerifyAt = time.Time{}
+	state.RecoveryHint = time.Time{}
+	state.LastValidation = ""
 	if status == domain.StatusExhausted {
 		if pool, ok := m.poolLocked(poolName); ok {
 			state.NextVerifyAt = state.ChangedAt.Add(pool.VerifyInterval)
@@ -139,7 +144,7 @@ func (m *Manager) SetStatus(poolName, credentialID string, status domain.Credent
 	return m.persistLocked()
 }
 
-func (m *Manager) ScheduleNextVerification(poolName, credentialID, reason string) error {
+func (m *Manager) ScheduleNextVerification(poolName, credentialID, note string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	state := m.state.Credentials[credentialID]
@@ -151,7 +156,7 @@ func (m *Manager) ScheduleNextVerification(poolName, credentialID, reason string
 		return fmt.Errorf("unknown pool %q", poolName)
 	}
 	state.NextVerifyAt = m.now().UTC().Add(pool.VerifyInterval)
-	state.Reason = reason
+	state.LastValidation = note
 	m.state.Credentials[credentialID] = state
 	return m.persistLocked()
 }

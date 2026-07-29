@@ -87,9 +87,12 @@ func (r *Runner) Validate(ctx context.Context, poolName, credentialID string) (d
 	}
 	match := classify.Evaluate(selection.Service.Rules, classify.Response{StatusCode: response.StatusCode, Header: response.Header, Body: body})
 	if match.Result == domain.ClassInconclusive {
-		r.reschedule(poolName, credentialID, "validation inconclusive: "+match.RuleName)
-	} else if err := r.manager.Transition(poolName, credentialID, match.Result, "validation: "+match.RuleName); err != nil {
-		return match.Result, err
+		r.reschedule(poolName, credentialID, "inconclusive: "+match.RuleName)
+	} else {
+		recoveryHint, _ := classify.ExtractRecovery(selection.Service.RecoveryHint, classify.Response{StatusCode: response.StatusCode, Header: response.Header, Body: body}, time.Now())
+		if err := r.manager.Transition(poolName, credentialID, match.Result, match.RuleName, recoveryHint); err != nil {
+			return match.Result, err
+		}
 	}
 	r.logger.Info("credential validation complete", "pool", poolName, "credential", credentialID,
 		"status", response.StatusCode, "classification", match.Result, "rule", match.RuleName)

@@ -139,11 +139,12 @@ type Config struct {
 }
 
 type CredentialState struct {
-	Status       CredentialStatus `json:"status"`
-	ChangedAt    time.Time        `json:"changed_at"`
-	Reason       string           `json:"reason,omitempty"`
-	NextVerifyAt time.Time        `json:"next_verify_at,omitempty"`
-	RecoveryHint time.Time        `json:"recovery_hint,omitempty"`
+	Status         CredentialStatus `json:"status"`
+	ChangedAt      time.Time        `json:"changed_at"`
+	Reason         string           `json:"reason,omitempty"`
+	NextVerifyAt   time.Time        `json:"next_verify_at,omitempty"`
+	RecoveryHint   time.Time        `json:"recovery_hint,omitempty"`
+	LastValidation string           `json:"last_validation,omitempty"`
 }
 
 type RuntimeState struct {
